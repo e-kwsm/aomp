@@ -40,12 +40,12 @@ AOMP=${AOMP:-$HOME/rocm/aomp}
 AOMP_INSTALL_DIR=${AOMP}_${AOMP_VERSION_STRING}
 
 GPURUN_BINDIR=${GPURUN_BINDIR:-$AOMP/bin}
-if [ ! -f "$GPURUN_BINDIR/gpurun" ] ; then
+if [ ! -x "$GPURUN_BINDIR/gpurun" ] ; then
     # When using trunk, try to find gpurun and rocminfo in ROCm
     _SILENT=""
     GPURUN_BINDIR=/opt/rocm/llvm/bin
 fi
-if [ ! -f "$AOMP/bin/rocminfo" ] ; then
+if [ ! -x "$AOMP/bin/rocminfo" ] ; then
   export ROCMINFO_BINARY=/opt/rocm/bin/rocminfo
 fi
 
@@ -150,7 +150,7 @@ CUDABIN=${CUDABIN:-$CUDA/bin}
 # unless overridden with AOMP_CMAKE, get CMAKE from the
 # prerequisite supplemental component cmake.
 AOMP_CMAKE=${AOMP_CMAKE:-$AOMP_SUPP/cmake/bin/cmake}
-if [ ! -f "$AOMP_CMAKE" ] ; then
+if [ ! -x $AOMP_CMAKE ] ; then
   AOMP_CMAKE=$(which cmake)
   if [ "$AOMP_CMAKE" == "" ] ; then
     echo "ERROR: finding cmake in aomp_common_vars."
@@ -205,8 +205,8 @@ fi
 # Otherwise default to installed AOMP. If not yet installed, try rocm clang.
 _clang_compiler=$LLVM_INSTALL_LOC/bin/clang
 _clangxx_compiler=$LLVM_INSTALL_LOC/bin/clang++
-[ ! -f "$_clang_compiler" ] && _clang_compiler=/opt/rocm/llvm/bin/clang
-[ ! -f "$_clangxx_compiler" ] && _clangxx_compiler=/opt/rocm/llvm/bin/clang++
+[ ! -x "$_clang_compiler" ] && _clang_compiler=/opt/rocm/llvm/bin/clang
+[ ! -x "$_clangxx_compiler" ] && _clangxx_compiler=/opt/rocm/llvm/bin/clang++
 AOMP_CLANG_COMPILER=${AOMP_CLANG_COMPILER:-$_clang_compiler}
 AOMP_CLANGXX_COMPILER=${AOMP_CLANGXX_COMPILER:-$_clangxx_compiler}
 
@@ -549,7 +549,7 @@ fi
 declare -a ASAN_FLAGS
 
 if [ "$AOMP_BUILD_SANITIZER" == 1 ]; then
-   if [ -f "${LLVM_INSTALL_LOC}/bin/clang" ]; then
+   if [ -x "${LLVM_INSTALL_LOC}/bin/clang" ]; then
       ASAN_LIB=$(${LLVM_INSTALL_LOC}/bin/clang --print-file-name=libclang_rt.asan-x86_64.so)
       ASAN_LIB_PATH=$(dirname "$ASAN_LIB")
       if [ ! -d "$ASAN_LIB_PATH" ]; then
