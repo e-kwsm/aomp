@@ -119,7 +119,7 @@ if [ -d build_${BUILD_SUFFIX} ] && [ "$2" != "build" ]; then
     if [ "$1" == "hip" ]; then
       build_${BUILD_SUFFIX}/bin/raja-perf.exe --show-progress --refvar Base_HIP
     elif [ "$1" == "openmp" ]; then
-      if [ ! -f build_${BUILD_SUFFIX}/bin/raja-perf-omptarget.exe ]; then
+      if [ ! -x build_${BUILD_SUFFIX}/bin/raja-perf-omptarget.exe ]; then
         echo "ERROR file build_${BUILD_SUFFIX}/bin/raja-perf-omptarget.exe not found"
         echo "      please build raja first"
         exit 1
