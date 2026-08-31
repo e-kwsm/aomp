@@ -37,7 +37,9 @@ else
                 gfx1010, gfx1010:xnack+\
                 gfx1011, gfx1011:xnack+\
                 gfx1012, gfx1012:xnack+\
-                gfx1013, gfx1013:xnack+
+                gfx1013, gfx1013:xnack+\
+                gfx1250,\
+                gfx1251
 endif
 
 
@@ -101,16 +103,19 @@ else
   AOMPHIP = $(AOMP)/../..
  endif
 endif
-
+# look file pip installed filecheck first
+FILECHECK?=/home/$(USER)/.local/bin/filecheck
+FILECHECK_RT=$(shell ls $(FILECHECK) 2>/dev/null || echo error)
+ifeq ($(FILECHECK_RT),error)
 # Look for FileCheck on the system in various places.
 # Check local AOMP install first.
-FILECHECK=$(AOMP)/bin/FileCheck
-FILECHECK_RT=$(shell ls $(FILECHECK) 2>/dev/null || echo error)
-ifeq ($(FILECHECK_RT),error)
-FILECHECK=$(HOME)/openmp-utils/bin/FileCheck
-FILECHECK_RT=$(shell ls $(FILECHECK) 2>/dev/null || echo error)
-endif
-ifeq ($(FILECHECK_RT),error)
+ FILECHECK=$(AOMP)/bin/FileCheck
+ FILECHECK_RT=$(shell ls $(FILECHECK) 2>/dev/null || echo error)
+ ifeq ($(FILECHECK_RT),error)
+ FILECHECK=$(HOME)/openmp-utils/bin/FileCheck
+ FILECHECK_RT=$(shell ls $(FILECHECK) 2>/dev/null || echo error)
+ endif
+ ifeq ($(FILECHECK_RT),error)
   # Check default AOMP release location.
   FILECHECK=/usr/lib/aomp/bin/FileCheck
   FILECHECK_RT=$(shell ls $(FILECHECK) 2> /dev/null || echo error)
@@ -142,7 +147,9 @@ ifeq ($(FILECHECK_RT),error)
       endif
     endif
   endif
+ endif
 endif
+#$(warning ----INFO---- FileCheck found at $(FILECHECK))
 
 
 OMPIDIR ?= ~/local/openmpi
@@ -271,6 +278,18 @@ ifeq ($(AOMP_SANITIZER),1)
   ASAN_UNSUPPORTED = ASAN_COMPILE ASAN_RUNTIME
 endif
 
+# gfx1250 and gfx1251 always operate with xnack enabled and the compiler
+# rejects an explicit xnack target feature (e.g. :xnack+) on these
+# architectures. Drop any requested xnack feature so tests that hard-code
+# AOMP_TARGET_FEATURES still build and run. All other architectures keep the
+# existing behavior.
+ifneq (,$(findstring gfx1250,$(AOMP_GPU)))
+  AOMP_TARGET_FEATURES := $(subst :xnack-,,$(subst :xnack+,,$(AOMP_TARGET_FEATURES)))
+endif
+ifneq (,$(findstring gfx1251,$(AOMP_GPU)))
+  AOMP_TARGET_FEATURES := $(subst :xnack-,,$(subst :xnack+,,$(AOMP_TARGET_FEATURES)))
+endif
+
 ifeq ($(AOMP_TARGET_FEATURES),)
 GPU_W_FEATURES = $(AOMP_GPU)
 else
@@ -356,7 +375,7 @@ IMPLICIT_GPU_FLANG_RT ?= 1
 ifeq ($(IMPLICIT_GPU_FLANG_RT),1)
   FLANG_GPU_LINK_FLAGS =
 else
-  FLANG_GPU_LINK_FLAGS = -fno-gpu-flang-rt -lflang_rt.hostdevice
+  FLANG_GPU_LINK_FLAGS = -fno-gpu-flang-rt
 endif
 
 ifeq ($(NOOPT),1)
@@ -382,7 +401,8 @@ else
 endif
 
 # ompTest: Set header include path + linker flag for corresponding OMPT tests
-OMPTEST     = -I$(AOMP)/include/omptest -lomptest
+CLANG_RESOURCE_DIR := $(shell $(AOMP)/bin/clang -print-resource-dir)
+OMPTEST             = -I$(CLANG_RESOURCE_DIR)/include/omptest -lomptest
 
 # ompTest: Set and export CMake config path
 omptest_DIR = $(AOMP)/lib/cmake/openmp/omptest/

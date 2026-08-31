@@ -1,0 +1,15 @@
+diff --git a/compiler/CMakeLists.txt b/compiler/CMakeLists.txt
+index 7279cdbb3..103eb2332 100644
+--- a/compiler/CMakeLists.txt
++++ b/compiler/CMakeLists.txt
+@@ -22,6 +22,10 @@ if(THEROCK_ENABLE_COMPILER)
+   if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+     list(APPEND _extra_llvm_cmake_args "-DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON")
+   endif()
++  if (DEFINED ENV{SROCK_VERSION_MOD})
++    list(APPEND _extra_llvm_cmake_args "-DLLVM_VERSION_SUFFIX=_SROCK")
++    list(APPEND _extra_llvm_cmake_args "-DLLVM_VERSION_PATCH=$ENV{SROCK_VERSION_MOD}")
++  endif()
+ 
+   # Building Flang is very memory-intensive on systems with many cores. Allow
+   # users to specify the level of concurrency for these tasks so they can

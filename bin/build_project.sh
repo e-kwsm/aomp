@@ -21,11 +21,6 @@ INSTALL_PROJECT=${INSTALL_PROJECT:-$LLVM_INSTALL_LOC}
 
 WEBSITE="http\:\/\/github.com\/ROCm\/aomp"
 
-# Check-openmp prep
-# Patch rocr
-ROCR_REPO_DIR=$AOMP_REPOS/$AOMP_ROCR_REPO_NAME
-patchrepo "$ROCR_REPO_DIR"
-
 # Patch llvm-project with ATD patch customized for amd-staging.
 # WARNING: This patch (ATD_ASO_full.patch) rarely applies cleanly
 #          because of its size and constant trunk merges to amd-staging.
@@ -58,10 +53,10 @@ else
    COMPILERS=(-DCMAKE_C_COMPILER="$AOMP_CC_COMPILER"
               -DCMAKE_CXX_COMPILER="$AOMP_CXX_COMPILER")
    if [ "$AOMP_PROC" == "aarch64" ] ; then
-      TARGETS_TO_BUILD="AMDGPU;${AOMP_NVPTX_TARGET}AArch64"
+      TARGETS_TO_BUILD="AMDGPU;${AOMP_NVPTX_TARGET}AArch64;SPIRV"
       _qmathopt=()
    else
-      TARGETS_TO_BUILD="AMDGPU;${AOMP_NVPTX_TARGET}X86"
+      TARGETS_TO_BUILD="AMDGPU;${AOMP_NVPTX_TARGET}X86;SPIRV"
    fi
 fi
 
@@ -129,15 +124,11 @@ MYCMAKEOPTS=(-DCMAKE_BUILD_TYPE="$BUILD_TYPE"
              -DLLVM_BUILD_LLVM_DYLIB=ON
              -DLLVM_LINK_LLVM_DYLIB=ON
              -DCLANG_LINK_CLANG_DYLIB=ON
-             -DLIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH="$AOMP_REPOS/$AOMP_ROCR_REPO_NAME"
-             -DOFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR=On
              -DLIBOMPTARGET_EXTERNAL_PROJECT_ROCM_DEVICE_LIBS_PATH="$AOMP_REPOS/$AOMP_PROJECT_REPO_NAME/amd/device-libs"
              -DLLVM_EXTERNAL_PROJECTS=SPIRV_TRANSLATOR
              -DLLVM_EXTERNAL_SPIRV_TRANSLATOR_SOURCE_DIR="$AOMP_REPOS/SPIRV-LLVM-Translator"
              -DROCM_DEVICE_LIBS_INSTALL_PREFIX_PATH="$AOMP_INSTALL_DIR"
              -DROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC="$rocmdevicelib_loc_new"
-             -DROCM_LLVM_BACKWARD_COMPAT_LINK="$AOMP_INSTALL_DIR/llvm"
-             -DROCM_LLVM_BACKWARD_COMPAT_LINK_TARGET="./lib/llvm"
              -DLIBOMP_COPY_EXPORTS=OFF
              -DLIBOMPTARGET_ENABLE_DEBUG=ON
              -DLIBOMPTEST_INSTALL_COMPONENTS=ON
@@ -173,7 +164,7 @@ MYCMAKEOPTS=("${MYCMAKEOPTS[@]}"
              -DLLVM_RUNTIME_TARGETS="default;amdgcn-amd-amdhsa"
              -DRUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBC_PROVIDER=llvm
              -DRUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER=llvm
-             -DRUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES="$AOMP_REPOS/$AOMP_PROJECT_REPO_NAME/libcxx/cmake/caches/AMDGPU.cmake"
+             -DRUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES="$AOMP_REPOS/$AOMP_PROJECT_REPO_NAME/compiler-rt/cmake/caches/AMDGPU.cmake;$AOMP_REPOS/$AOMP_PROJECT_REPO_NAME/libcxx/cmake/caches/AMDGPU.cmake"
              )
 
 # Enable Compiler-rt Sanitizer Build
@@ -323,7 +314,6 @@ if [ "$1" == "install" ] ; then
    if [ "$AOMP_APPLY_ATD_AMD_STAGING_PATCH"  == 1 ] ; then
       removepatch "$REPO_DIR"
    fi
-   removepatch "$ROCR_REPO_DIR"
    amd_compiler_symlinks=("amdclang" "amdclang++" "amdclang-cl" "amdclang-cpp" "amdflang" "amdlld")
    amd_compiler_cfg=("clang" "clang++" "clang-cpp" "clang-${AOMP_MAJOR_VERSION}" "clang-cl" "flang")
 
@@ -352,6 +342,12 @@ if [ "$1" == "install" ] ; then
          #cp ${LLVM_INSTALL_LOC}/bin/rocm.cfg $config_file
       fi
    done
+   # Install llvm -> lib/llvm symlink. The cmake in llvm will be removed. ROCM_LLVM_BACKWARD_COMPAT_LINK
+   # ROCM_LLVM_BACKWARD_COMPAT_LINK_TARGET will be deprecated.
+   if [ ! -L "$AOMP_INSTALL_DIR/llvm" ] && [ ! -e "$AOMP_INSTALL_DIR/llvm" ]; then
+      echo "Creating llvm -> lib/llvm symlink in $AOMP_INSTALL_DIR"
+      ln -s lib/llvm "$AOMP_INSTALL_DIR"/llvm
+   fi
 else
    echo
    echo "SUCCESSFUL BUILD, please run:  $0 install"

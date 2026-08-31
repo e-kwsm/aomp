@@ -59,10 +59,10 @@ else
   SUITE_LIST=${SUITE_LIST:-"examples smoke-limbo smoke-dev smoke-fort-dev smoke smoke-asan smoke-fort smoke-fort-limbo omp5 openmpapps LLNL nekbone ovo babelstream fortran-babelstream accel2023 hpc2021"}
 fi
 
-blockinglist="examples smoke smoke-limbo openmpapps sollve45 sollve50 sollve51 sollve52 babelstream ovo accel2023 hpc2021 nekbone smoke-fort smoke-fort-limbo"
+blockinglist="examples smoke smoke-limbo openmpapps sollve45 sollve50 sollve51 sollve52 babelstream ovo hpc2021 accel2023 nekbone smoke-fort"
 
 EPSDB_LIST=${EPSDB_LIST:-"examples smoke-limbo smoke-dev smoke smoke-asan omp5 openmpapps LLNL nekbone ovo babelstream fortran-babelstream accel2023 hpc2021  smoke-fort smoke-fort-limbo smoke-fort-dev"}
-THEROCK_LIST=${THEROCK_LIST:-"smoke smoke-fort nekbone babelstream fortran-babelstream accel2023 hpc2021"}
+THEROCK_LIST=${THEROCK_LIST:-"smoke smoke-limbo smoke-fort smoke-fort-limbo smoke-dev nekbone babelstream fortran-babelstream accel2023 hpc2021"}
 
 export AOMP_USE_CCACHE=0
 
@@ -93,7 +93,11 @@ if [ "$EPSDB" == "1" ]; then
  git log -1
 fi
 
-EPSDB=1 ./clone_test.sh > /dev/null
+if [ "$SKIP_CLONE" == "1" ]; then
+  echo skipping clone
+else
+  EPSDB=1 ./clone_test.sh > /dev/null
+fi
 AOMP_TEST_DIR=${AOMP_TEST_DIR:-"$HOME/git/aomp-test"}
 echo AOMP before : $AOMP
 if [ ! -e $AOMP/bin ]; then
@@ -101,6 +105,8 @@ if [ ! -e $AOMP/bin ]; then
   unset AOMP
 fi
 # Set AOMP to point to rocm symlink or newest version.
+newestrocm=$(ls --sort=time /opt | grep -m 1 rocm)
+echo "newestrocm: $newestrocm"
 if [ -e /opt/rocm/lib/llvm/bin ]; then
   AOMP=${AOMP:-"/opt/rocm/lib/llvm"}
   ROCMINF="$AOMP/../../"
@@ -111,20 +117,36 @@ elif [ -e /opt/rocm/llvm/bin ]; then
   ROCMINF="$AOMP/../"
   ROCMDIR="$AOMP/../"
   echo setting 2 $AOMP
+elif [ -e "/opt/$newestrocm/lib/llvm/bin" ]; then
+  AOMP=${AOMP:-"/opt/$newestrocm/lib/llvm"}
+  ROCMINF=/opt/$newestrocm
+  ROCMDIR=$ROCMINF
+  echo setting 3 $AOMP
+elif [ -e "/opt/$newestrocm/llvm/bin" ]; then
+  AOMP=${AOMP:-"/opt/$newestrocm/llvm"}
+  ROCMINF=/opt/$newestrocm/
+  ROCMDIR=$ROCMINF/lib
+  echo setting 4 $AOMP
+elif [ -e "$ROCM_PATH/lib/llvm/bin" ]; then
+  AOMP=${AOMP:-"$ROCM_PATH/lib/llvm"}
+  ROCMINF="$AOMP/../../"
+  ROCMDIR="$AOMP/../../"
+  echo setting 5 $AOMP
+elif [ -e "$ROCM_PATH/llvm/bin" ]; then
+  AOMP=${AOMP:-"$ROCM_PATH/llvm"}
+  ROCMINF="$AOMP/../"
+  ROCMDIR="$AOMP/../"
+  echo setting 6 $AOMP
 else
-  newestrocm=$(ls --sort=time /opt | grep -m 1 rocm)
-  if [ -e /opt/$newestrocm/lib/llvm/bin ]; then
-    AOMP=${AOMP:-"/opt/$newestrocm/lib/llvm"}
-    ROCMINF=/opt/$newestrocm
-    ROCMDIR=$ROCMINF
-    echo setting 3 $AOMP
-  else
-    AOMP=${AOMP:-"/opt/$newestrocm/llvm"}
-    ROCMINF=/opt/$newestrocm/
-    ROCMDIR=$ROCMINF/lib
-    echo setting 4 $AOMP
-  fi
+  echo "Error: A valid ROCm install was not found. Please point ROCM_PATH or AOMP to a valid ROCm install."
+  echo "       Examples: ROCM_PATH=/opt/rocm; ROCM_PATH=/opt/rocm-7.10; AOMP=/opt/rocm/llvm; AOMP=/opt/rocm-7.10/lib/llvm"
+  echo "       Note that AOMP needs the llvm or lib/llvm path suffix."
+  exit 1
 fi
+
+echo ROCMDIR=$ROCMDIR/bin
+export PATH=$PATH:$ROCMDIR/bin
+
 export AOMP
 echo "AOMP = $AOMP"
 export REAL_AOMP=`realpath $AOMP`
@@ -135,7 +157,7 @@ export REAL_AOMP=`realpath $AOMP`
 # Makefile.defs uses SKIP_USM env var to disable compilation and execution
 # of the tests which require USM support.
 SKIP_USM=0
-XNACK_PLUS=$(HSA_XNACK=1 "$ROCMINFO/binrocminfo" | grep -i "xnack+" | wc -l)
+XNACK_PLUS=$(HSA_XNACK=1 "$ROCMINF/bin/rocminfo" | grep -i "xnack+" | wc -l)
 if [ $XNACK_PLUS -eq 0 ]; then
   SKIP_USM=1
 fi
@@ -161,28 +183,40 @@ if [ ! -f "$AOMP/bin/gpurun" ]; then
   chmod 755 "$HOME/openmp-utils/bin/gpurun"
   export GPURUN_BINDIR="$HOME/openmp-utils/bin"
 fi
-clangversion=`$AOMP/bin/clang --version`
+clangversion=$("$AOMP/bin/clang" --version)
 aomp=0
 if [[ "$clangversion" =~ "AOMP_STANDALONE" ]]; then
+  echo "Detected AOMP"
   aomp=1
 fi
 
+therock=0
 if [ $aomp -eq 0 ]; then
   # Determine ROCm version.
   echo ROCMINF=$ROCMINF
   rocm=$(cat "$ROCMINF"/.info/version*|head -1)
+  rocmregexpartial="([0-9]+)\.([0-9]+)"
   rocmregex="([0-9]+\.[0-9]+\.[0-9]+)"
-  therock=0
-  rocmver=0
   if [[ "$rocm" =~ $rocmregex ]]; then
     rocmver=$(echo ${BASH_REMATCH[1]} | sed "s/\.//g")
-    echo rocmver: $rocmver
-    if [ $rocmver -ge 7100 ]; then
-      echo "--- Using TheRock Compiler ---"
+  else
+    echo Unable to determine rocm version.
+    exit 1
+  fi
+  if [[ "$rocm" =~ $rocmregexpartial ]]; then
+    rocmvermajor=${BASH_REMATCH[1]}
+    rocmverminor=${BASH_REMATCH[2]}
+    echo "rocmvermajor: $rocmvermajor"
+    echo "rocmverminor: $rocmverminor"
+    if [ "$rocmvermajor" -gt 7 ]; then
+      echo "Detected TheRock"
+      therock=1
+    elif [ "$rocmvermajor" -eq 7 ] && [ "$rocmverminor" -ge 10 ]; then
+      echo "Detected TheRock"
       therock=1
     fi
   else
-    echo Unable to determine rocm version.
+    echo Unable to determine major/minor rocm version.
     exit 1
   fi
 fi
@@ -339,7 +373,7 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-$AOMP/bin/flang1 --version
+$AOMP/bin/flang --version
 
 # Parent dir should be ROCm base dir.
 if [ $aomp -eq 1 ]; then
@@ -1088,6 +1122,7 @@ function hpc2021(){
     mkdir -p "$resultsdir"/hpc2021
     cd "$aompdir"/bin
     unset ROCR_VISIBLE_DEVICES
+    export PMIX_MCA_pcompress_base_silence_warning=1
     ./run_hpc2021.sh -clean
     cd $AOMP_TEST_DIR/hpc2021-1.1.9
     grep ratio= result/*.log

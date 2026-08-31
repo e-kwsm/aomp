@@ -31,7 +31,7 @@ setaompgpu
 
 export BLT_SRC_DIR=${BLT_SRC_DIR:-BLT}
 export UMT_SRC_DIR=${UMT_SRC_DIR:-UMT}
-export  CAMP_SRC_DIR=${CAMP_SRC_DIR:-CAMP}
+export CAMP_SRC_DIR=${CAMP_SRC_DIR:-CAMP}
 export CONDUIT_SRC_DIR=${CONDUIT_SRC_DIR:-CONDUIT}
 export UMPIRE_SRC_DIR=${UMPIRE_SRC_DIR:-UMPIRE}
 
@@ -87,7 +87,7 @@ if [ "$1" == "build_umt" ]; then
     fi
 
     pushd $AOMP_REPOS_TEST/$CAMP_SRC_DIR
-    git clone https://github.com/LLNL/camp.git .
+    git clone --branch v2025.12.0 https://github.com/LLNL/camp.git .
     rm -rf build
     mkdir build
     pushd build
@@ -104,7 +104,7 @@ if [ "$1" == "build_umt" ]; then
     popd
 
     pushd $AOMP_REPOS_TEST/$CONDUIT_SRC_DIR
-    git clone https://github.com/LLNL/conduit.git .
+    git clone --branch v0.9.6 https://github.com/LLNL/conduit.git .
     rm -rf build
     mkdir build
     pushd build
@@ -120,6 +120,7 @@ if [ "$1" == "build_umt" ]; then
     pushd $AOMP_REPOS_TEST/$UMPIRE_SRC_DIR
     git clone https://github.com/LLNL/Umpire.git .
     git submodule update --init
+    git -C src/tpl/umpire/camp checkout v2025.12.0
     rm -rf build
     mkdir build
     pushd build
@@ -143,7 +144,7 @@ if [ "$1" == "build_umt" ]; then
     # This applies specific tweaks to UMT required for Flang, we can likely
     # remove this in the near future once it's incorporated into UMT and
     # one or two smaller flang bugs are squashed
-    git apply $thisdir/patches/UMT-5-9-0-amdflang-mods.patch
+    git apply $thisdir/patches/UMT-5-9-0-amdflang-mods-with-fexceptions-disabled.patch
     save_status
     if [[ $mystat -eq 0 ]]; then
         echo "PATCH SUCCESS UMT"
@@ -152,6 +153,7 @@ if [ "$1" == "build_umt" ]; then
         exit $mystat
     fi
 
+    IMPLICIT_GPU_FLANG_RT=${IMPLICIT_GPU_FLANG_RT:-1}
     if [[ $IMPLICIT_GPU_FLANG_RT -eq 1 ]]; then
         FORTRAN_OFFLOAD_LIB=
     else
